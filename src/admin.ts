@@ -17,23 +17,23 @@ export function createAddMembersScene(
 
     const scene = new Scenes.BaseScene<BotContext>("add_members");
 
-    scene.enter(async (ctx) => {
+    scene.enter(async (ctx: BotContext) => {
         await ctx.reply("Send me a contact", keyboard);
     });
-    scene.leave(async (ctx) => {
+    scene.leave(async (ctx: BotContext) => {
         await ctx.reply(`Member list: ${ctx.scene.session.members}`, Markup.removeKeyboard());
     });
-    scene.hears("Start", async ctx => {
+    scene.hears("Start", async (ctx: BotContext) => {
         await setMemberList(ctx.scene.session.members);
         return await enter<BotContext>("match")(ctx);
     });
     scene.hears("Cancel", leave<BotContext>());
 
-    scene.on(message("user_shared"), ctx => {
+    scene.on(message("user_shared"), (ctx) => {
         const user = ctx.message.user_shared;
         ctx.scene.session.members.push(user.user_id);
     });
-    scene.on(message("chat_shared"), ctx => {
+    scene.on(message("chat_shared"), (ctx) => {
         const chat = ctx.message.chat_shared;
         ctx.scene.session.members.push(chat.chat_id);
     });
@@ -42,7 +42,7 @@ export function createAddMembersScene(
         ctx.scene.session.members.push(contact.user_id!);
         await ctx.reply("Received contact", keyboard);
     });
-    scene.on(message(), ctx => ctx.reply("Not a contact", keyboard));
+    scene.on(message(), (ctx: BotContext) => ctx.reply("Not a contact", keyboard));
 
     return scene;
 }
@@ -59,28 +59,29 @@ export function createMatchScene(
         Markup.button.callback("Finish", "finish"),
     ]);
 
-    scene.enter(async (ctx) => {
-        const info = await nextRound();
-        await ctx.reply(`Started round ${info.currentRound + 1}/${info.totalRounds}`, keyboard);
-    });
-    scene.leave(async (ctx) => {
-        await ctx.reply("Networking finished", Markup.removeKeyboard());
-    });
-    scene.action("next", async ctx => {
-        await ctx.answerCbQuery();
+    const startNextRound = async (ctx: BotContext) => {
         const info = await nextRound();
         if (info.currentRound != undefined) {
             await ctx.reply(`Starting round ${info.currentRound + 1}/${info.totalRounds}`, keyboard);
         } else {
             return leave<BotContext>()(ctx);
         }
+    };
+
+    scene.enter(startNextRound);
+    scene.leave(async (ctx: BotContext) => {
+        await ctx.reply("Networking finished", Markup.removeKeyboard());
     });
-    scene.action("finish", async ctx => {
+    scene.action("next", async (ctx: BotContext) => {
+        await ctx.answerCbQuery();
+        return startNextRound(ctx);
+    });
+    scene.action("finish", async (ctx: BotContext) => {
         await ctx.answerCbQuery();
         return leave<BotContext>()(ctx);
     });
 
-    scene.on(message(), ctx => ctx.reply("Couldn't parse", keyboard));
+    scene.on(message(), (ctx: BotContext) => ctx.reply("Couldn't parse", keyboard));
 
     return scene;
 }

@@ -14,9 +14,9 @@ export function generateMatchings(n: number): Matching[] {
         const matchings = generateMatchings(n + 1);
         return matchings.map(matching => matching.map(pair => {
             if (pair[0] == n)
-                return [pair[1], null];
+                return [pair[1]!, null];
             if (pair[1] == n)
-                return [pair[0], null];
+                return [pair[0]!, null];
             return pair;
         }));
     }
