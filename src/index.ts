@@ -4,6 +4,8 @@ import { createAddMembersScene, createMatchScene } from "./admin";
 import { BotContext, RoundInfo } from "./types";
 import { Matching, generateMatchings } from "./matching";
 
+const positionFiles = [1, 2, 3, 4, 5, 6, 7, 8].map(x => `https://raw.githubusercontent.com/kalabukdima/pairwise/master/static/${x}.jpg`);
+
 const state: {
     members: number[];
     matchings: Matching[];
@@ -37,7 +39,11 @@ async function nextRound(): Promise<RoundInfo> {
     const promises = state.matchings[state.currentRound].flatMap((assignment, positionIndex) => {
         if (assignment[1] != null) {
             return assignment.map(memberIndex =>
-                bot.telegram.sendMessage(state.members[memberIndex], `Go to position ${positionIndex}`),
+                bot.telegram.sendPhoto(
+                    state.members[memberIndex],
+                    positionFiles[positionIndex],
+                    { caption: `Go to position ${positionIndex + 1}` }
+                ) as Promise<unknown>,
             );
         } else {
             return [
