@@ -1,7 +1,6 @@
 import { Markup, Scenes } from "telegraf";
 import { message } from "telegraf/filters";
-import { strict as assert } from "assert";
-import { BotContext } from "./types";
+import { BotContext, RoundInfo } from "./types";
 
 
 export function createAddMembersScene(
@@ -12,7 +11,8 @@ export function createAddMembersScene(
     const keyboard = Markup.keyboard([[
         Markup.button.userRequest("Select user", 0),
         Markup.button.groupRequest("Select group", 1),
-        Markup.button.callback("Done", "done"),
+        Markup.button.callback("Start", "start"),
+        Markup.button.callback("Cancel", "cancel"),
     ]]).resize();
 
     const scene = new Scenes.BaseScene<BotContext>("add_members");
@@ -21,29 +21,66 @@ export function createAddMembersScene(
         await ctx.reply("Send me a contact", keyboard);
     });
     scene.leave(async (ctx) => {
-        await setMemberList(ctx.scene.session.members);
-        await ctx.reply(`Members list created: ${ctx.scene.session.members}`, Markup.removeKeyboard());
+        await ctx.reply(`Member list: ${ctx.scene.session.members}`, Markup.removeKeyboard());
     });
-    scene.hears("Done", leave<BotContext>());
+    scene.hears("Start", async ctx => {
+        await setMemberList(ctx.scene.session.members);
+        return await enter<BotContext>("match")(ctx);
+    });
+    scene.hears("Cancel", leave<BotContext>());
 
     scene.on(message("user_shared"), ctx => {
         const user = ctx.message.user_shared;
         ctx.scene.session.members.push(user.user_id);
-        console.log(user);
     });
     scene.on(message("chat_shared"), ctx => {
         const chat = ctx.message.chat_shared;
         ctx.scene.session.members.push(chat.chat_id);
-        console.log(chat);
     });
     scene.on(message("contact"), async (ctx) => {
         const contact = ctx.message.contact;
-        console.log(contact);
-        assert(contact.user_id);
-        ctx.scene.session.members.push(contact.user_id);
+        ctx.scene.session.members.push(contact.user_id!);
         await ctx.reply("Received contact", keyboard);
     });
     scene.on(message(), ctx => ctx.reply("Not a contact", keyboard));
+
+    return scene;
+}
+
+export function createMatchScene(
+    nextRound: () => Promise<RoundInfo>,
+): Scenes.BaseScene<BotContext> {
+    const { enter, leave } = Scenes.Stage;
+
+    const scene = new Scenes.BaseScene<BotContext>("match");
+
+    const keyboard = Markup.inlineKeyboard([
+        Markup.button.callback("Next pair", "next"),
+        Markup.button.callback("Finish", "finish"),
+    ]);
+
+    scene.enter(async (ctx) => {
+        const info = await nextRound();
+        await ctx.reply(`Started round ${info.currentRound + 1}/${info.totalRounds}`, keyboard);
+    });
+    scene.leave(async (ctx) => {
+        await ctx.reply("Networking finished", Markup.removeKeyboard());
+    });
+    scene.action("next", async ctx => {
+        await ctx.answerCbQuery();
+        const info = await nextRound();
+        if (info.currentRound != undefined) {
+            await ctx.reply(`Starting round ${info.currentRound + 1}/${info.totalRounds}`, keyboard);
+        } else {
+            return leave<BotContext>()(ctx);
+        }
+    });
+    scene.action("finish", async ctx => {
+        await ctx.answerCbQuery();
+        return leave<BotContext>()(ctx);
+    });
+
+    scene.on(message(), ctx => ctx.reply("Couldn't parse", keyboard));
 
     return scene;
 }

@@ -5,3 +5,8 @@ export interface AddMembersSession extends Scenes.SceneSessionData {
 }
 
 export type BotContext = Scenes.SceneContext<AddMembersSession>;
+
+export interface RoundInfo {
+    currentRound: number | undefined;
+    totalRounds: number;
+};

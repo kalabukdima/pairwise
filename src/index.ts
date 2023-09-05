@@ -1,7 +1,56 @@
 import "dotenv/config";
 import { Context, Telegraf, session, Markup, Scenes } from "telegraf"
-import { createAddMembersScene } from "./admin";
-import { BotContext } from "./types";
+import { createAddMembersScene, createMatchScene } from "./admin";
+import { BotContext, RoundInfo } from "./types";
+import { Matching, generateMatchings } from "./matching";
+
+const state: {
+    members: number[];
+    matchings: Matching[];
+    currentRound: number;
+} = {
+    members: [],
+    matchings: [],
+    currentRound: -1,
+}
+
+async function setMemberList(members: number[]): Promise<void> {
+    console.log("Selected members: ", members);
+    state.members = members;
+    state.matchings = generateMatchings(members.length);
+    state.currentRound = -1;
+    const promises = state.members.map(member => bot.telegram.sendMessage(member, "You were added to the networking"));
+    await Promise.all(promises);
+}
+
+async function nextRound(): Promise<RoundInfo> {
+    state.currentRound++;
+    if (state.currentRound >= state.matchings.length) {
+        const promises = state.members.map(member => bot.telegram.sendMessage(member, "Time is up"));
+        Promise.all(promises);
+        return {
+            currentRound: undefined,
+            totalRounds: state.matchings.length,
+        };
+    }
+
+    const promises = state.matchings[state.currentRound].flatMap((assignment, positionIndex) => {
+        if (assignment[1] != null) {
+            return assignment.map(memberIndex =>
+                bot.telegram.sendMessage(state.members[memberIndex], `Go to position ${positionIndex}`),
+            );
+        } else {
+            return [
+                bot.telegram.sendMessage(state.members[assignment[0]], "You skip this round")
+            ];
+        }
+    });
+    await Promise.all(promises);
+    return {
+        currentRound: state.currentRound,
+        totalRounds: state.matchings.length,
+    }
+}
 
 const token = process.env.BOT_TOKEN ?? "";
 
@@ -9,15 +58,10 @@ const bot = new Telegraf<BotContext>(token);
 
 bot.start((ctx) => ctx.reply("Welcome to the Startup House!"));
 
-export async function setMemberList(members: number[]): Promise<void> {
-    for (const member of members) {
-        await bot.telegram.sendMessage(member, "You were added to the networking");
-    }
-}
-
 const addMembersScene = createAddMembersScene(setMemberList);
-const stage = new Scenes.Stage<BotContext>([addMembersScene], {
-    ttl: 60,
+const matchScene = createMatchScene(nextRound);
+const stage = new Scenes.Stage<BotContext>([addMembersScene, matchScene], {
+    ttl: 600,
 });
 bot.use(session());
 bot.use(stage.middleware());
@@ -27,7 +71,6 @@ bot.use((ctx, next) => {
     return next();
 });
 bot.command("new_networking", ctx => ctx.scene.enter("add_members"));
-bot.command("echo", ctx => ctx.scene.enter("echo"));
 bot.on("message", ctx => {
     console.log(ctx.scene.session);
     ctx.reply("Try /new_networking", Markup.removeKeyboard());
