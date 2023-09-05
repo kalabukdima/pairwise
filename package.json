@@ -4,9 +4,11 @@
   "description": "Telegram bot generating round-robin tournament matchings",
   "license": "MIT",
   "scripts": {
-    "run": "ts-node src/index.ts",
+    "build": "tsc --build",
+    "start": "node dist/index.js",
     "dev": "concurrently 'tsc --watch' 'nodemon dist/index.js'",
-    "test": "jest"
+    "test": "jest",
+    "clean": "rm -rfv dist/"
   },
   "devDependencies": {
     "@types/debug": "^4.1.8",
