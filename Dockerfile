@@ -11,4 +11,6 @@ RUN yarn install \
 
 RUN yarn build
 
+ENV DEBUG="pairwise:*,telegraf:main"
+
 CMD [ "yarn", "start" ]
